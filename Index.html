@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>MMM Diwali Check-In Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    body {
+      background-color: #f6f8fa;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding-bottom: 80px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .header-bar {
+      background: linear-gradient(135deg, #b02a37, #d9534f);
+      color: white;
+      padding: 12px 16px;
+      border-radius: 0 0 16px 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 14px rgba(176, 42, 55, 0.2);
+    }
+    .header-logo {
+      height: 48px;
+      width: auto;
+      background-color: rgba(255, 255, 255, 0.95);
+      border-radius: 8px;
+      padding: 4px 8px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+    .badge-desk {
+      font-size: 0.95rem;
+      padding: 6px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+    }
+    .guest-card {
+      background: #ffffff;
+      border-radius: 12px;
+      border: 1px solid #e8ecf1;
+      border-left: 6px solid #adb5bd;
+      margin-bottom: 12px;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    .guest-card.checked-in {
+      border-left-color: #198754;
+      background: #fcfdfc;
+    }
+    .seat-badge {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #b02a37;
+      background: #fdebed;
+      padding: 4px 12px;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+    .count-pill {
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+    .btn-action-primary {
+      font-size: 1.05rem;
+      font-weight: 700;
+      padding: 10px 18px;
+      border-radius: 10px;
+    }
+    #reader {
+      width: 100%;
+      max-width: 380px;
+      margin: 0 auto;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .touch-btn {
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body class="p-2 p-md-3">
+
+  <!-- Top Navigation Header -->
+  <div class="header-bar d-flex justify-content-between align-items-center">
+    <div>
+      <button id="deskToggle" class="btn btn-light text-dark fw-bold badge-desk touch-btn" onclick="toggleDesk()">Desk 1</button>
+    </div>
+    
+    <div class="d-flex align-items-center gap-2">
+      <img src="https://mmmunich.com/wp-content/uploads/2019/03/mmmunich-lg.png" class="header-logo" alt="MMM Logo">
+      <div class="text-start">
+        <h5 class="m-0 fw-bold" style="line-height: 1.15;">MMM Diwali Check-In</h5>
+        <small class="opacity-90" style="font-size: 0.75rem;">Maharashtra Mandal Munich</small>
+      </div>
+    </div>
+
+    <div>
+      <button class="btn btn-warning fw-bold touch-btn px-3" onclick="refreshDirectory()">🔄 Sync</button>
+    </div>
+  </div>
+
+  <!-- Search & Action Toolbar -->
+  <div class="row g-2 mb-3">
+    <div class="col-7 col-md-8">
+      <input type="text" id="searchInput" class="form-control form-control-lg shadow-sm" 
+             placeholder="🔍 Search Surname, Name, ID..." oninput="filterDirectory()">
+    </div>
+    <div class="col-5 col-md-4 d-flex gap-2">
+      <button class="btn btn-primary w-50 fw-bold d-flex align-items-center justify-content-center touch-btn" onclick="toggleScanner()">
+        📷 QR
+      </button>
+      <button class="btn btn-success w-50 fw-bold d-flex align-items-center justify-content-center touch-btn" onclick="openWalkInModal()">
+        ➕ Spot
+      </button>
+    </div>
+  </div>
+
+  <!-- Camera QR Scanner -->
+  <div id="scannerCard" class="card shadow-sm mb-3 d-none">
+    <div class="card-body text-center p-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <strong class="text-secondary">Scan Attendee Ticket QR Code</strong>
+        <button class="btn-close" onclick="stopScanner()"></button>
+      </div>
+      <div id="reader"></div>
+    </div>
+  </div>
+
+  <!-- Status Summary Bar -->
+  <div class="d-flex justify-content-between px-2 mb-2 text-muted fw-semibold" style="font-size: 0.9rem;">
+    <span id="statSummary">Initializing system...</span>
+    <span id="statCheckedIn"></span>
+  </div>
+
+  <!-- Guest List Container -->
+  <div id="guestListContainer"></div>
+
+  <!-- 1. Confirmation Modal -->
+  <div class="modal fade" id="confirmCheckInModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+        <div class="modal-header bg-warning text-dark" style="border-radius: 16px 16px 0 0;">
+          <h5 class="modal-title fw-bold">⚠️ Confirm Guest Check-In</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4 text-center">
+          <p class="fs-5 mb-2">Do you want to check in <br><strong id="cGuestName" class="text-danger fs-4"></strong>?</p>
+          
+          <div class="card bg-light border-0 my-3 text-start p-3 small">
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted">Member / Guest ID:</span>
+              <strong id="cBookingId">--</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted">Headcount:</span>
+              <strong id="cHeadcount">--</strong>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span class="text-muted">Notification Recipient:</span>
+              <strong id="cEmail" class="text-primary text-truncate ms-2">--</strong>
+            </div>
+          </div>
+
+          <p class="text-muted small mb-0">
+            Tapping confirm reserves the next available seat block and dispatches the confirmation email.
+          </p>
+        </div>
+        <div class="modal-footer bg-light justify-content-between" style="border-radius: 0 0 16px 16px;">
+          <button type="button" class="btn btn-outline-secondary px-4 fw-semibold" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-success px-4 fw-bold fs-6" id="btnConfirmCheckIn" onclick="proceedWithCheckIn()">
+            ✓ Yes, Check In
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Result Pop-Up Modal -->
+  <div class="modal fade" id="checkInResultModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content text-center p-3 shadow-lg border-0" style="border-radius: 20px;">
+        <div class="modal-body">
+          <div style="font-size: 46px;">🎉</div>
+          <h3 class="fw-bold text-success mb-1" id="mGuestName">Checked In!</h3>
+          <p class="text-muted small" id="mBookingId"></p>
+
+          <div class="p-3 my-3" style="background: #ffebe6; border-radius: 14px;">
+            <div class="text-uppercase fw-bold text-muted small">Assigned Seating</div>
+            <div class="display-5 fw-bold text-danger" id="mAssignedSeats">Seats --</div>
+          </div>
+
+          <div class="row g-2 text-start mb-3">
+            <div class="col-6">
+              <div class="p-2 border rounded bg-light">
+                <small class="text-muted d-block fw-semibold">Wristbands to Hand:</small>
+                <strong id="mBands" class="text-primary fs-6"></strong>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="p-2 border rounded bg-light">
+                <small class="text-muted d-block fw-semibold">Food Coupons:</small>
+                <strong id="mCoupons" class="text-danger fs-5"></strong>
+              </div>
+            </div>
+          </div>
+
+          <div id="mEmailAlert" class="alert py-2 px-3 small d-flex align-items-center justify-content-center gap-2 mb-3">
+            <span id="mEmailIcon">✅</span> 
+            <span id="mEmailText"></span>
+          </div>
+
+          <button type="button" class="btn btn-dark w-100 py-3 fw-bold fs-5 touch-btn" style="border-radius: 12px;" data-bs-dismiss="modal">
+            Check-In Next Guest
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Spot Walk-In Registration Modal -->
+  <div class="modal fade" id="walkInModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+        <div class="modal-header bg-success text-white" style="border-radius: 16px 16px 0 0;">
+          <h5 class="modal-title fw-bold">➕ Spot Walk-In Registration</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-3">
+          <form id="walkInForm">
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label fw-bold small">First Name *</label>
+                <input type="text" id="wFirstName" class="form-control" required>
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold small">Last Name *</label>
+                <input type="text" id="wLastName" class="form-control" required>
+              </div>
+            </div>
+
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label fw-bold small">Email (for seat email)</label>
+                <input type="email" id="wEmail" class="form-control" placeholder="name@domain.de">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold small">Phone</label>
+                <input type="tel" id="wPhone" class="form-control" placeholder="+49...">
+              </div>
+            </div>
+
+            <div class="row g-2 mb-3">
+              <div class="col-3">
+                <label class="form-label fw-bold small">Adults</label>
+                <input type="number" id="wAdults" class="form-control" value="1" min="1" required>
+              </div>
+              <div class="col-3">
+                <label class="form-label fw-bold small">Kids (>12)</label>
+                <input type="number" id="wKids12" class="form-control" value="0" min="0">
+              </div>
+              <div class="col-3">
+                <label class="form-label fw-bold small">Kids (6-12)</label>
+                <input type="number" id="wKids6to12" class="form-control" value="0" min="0">
+              </div>
+              <div class="col-3">
+                <label class="form-label fw-bold small">Kids (<6)</label>
+                <input type="number" id="wKids6" class="form-control" value="0" min="0">
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-bold small">Notes / Payment</label>
+              <input type="text" id="wNotes" class="form-control" placeholder="Spot Cash / PayPal / etc.">
+            </div>
+
+            <button type="submit" id="wSubmitBtn" class="btn btn-success w-100 fw-bold py-2 fs-5 touch-btn" style="border-radius: 10px;">
+              Assign Seats & Complete Entry
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let directory = [];
+    let currentDesk = 'Desk 1';
+    let html5QrScanner = null;
+    let resultModal = null;
+    let walkInModal = null;
+    let confirmModal = null;
+    let pendingRowIndex = null;
+
+    // Resilient initialization: executes whether DOM is still loading or already parsed
+    function initApp() {
+      try {
+        if (typeof bootstrap !== 'undefined') {
+          const m1 = document.getElementById('checkInResultModal');
+          const m2 = document.getElementById('walkInModal');
+          const m3 = document.getElementById('confirmCheckInModal');
+          if (m1) resultModal = new bootstrap.Modal(m1);
+          if (m2) walkInModal = new bootstrap.Modal(m2);
+          if (m3) confirmModal = new bootstrap.Modal(m3);
+        }
+      } catch (err) {
+        console.warn('Modal init warning:', err);
+      }
+      refreshDirectory();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+
+    function toggleDesk() {
+      currentDesk = (currentDesk === 'Desk 1') ? 'Desk 2' : 'Desk 1';
+      document.getElementById('deskToggle').innerText = currentDesk;
+    }
+
+    function refreshDirectory() {
+      const stat = document.getElementById('statSummary');
+      if (stat) stat.innerText = 'Syncing latest sheet entries...';
+
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        if (stat) stat.innerText = '⚠️ Apps Script environment not detected.';
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(data => {
+          directory = data || [];
+          filterDirectory();
+        })
+        .withFailureHandler(err => {
+          const msg = (err && err.message) ? err.message : String(err);
+          if (stat) stat.innerText = '⚠️ Sync error: ' + msg;
+          console.error('getGuestDirectory failed:', err);
+        })
+        .getGuestDirectory();
+    }
+
+    function filterDirectory() {
+      const searchBox = document.getElementById('searchInput');
+      const q = searchBox ? searchBox.value.trim().toLowerCase() : '';
+      const filtered = !q ? directory : directory.filter(g => 
+        (g.fullName && g.fullName.toLowerCase().includes(q)) ||
+        (g.lastName && g.lastName.toLowerCase().includes(q)) ||
+        (g.memberId && g.memberId.toLowerCase().includes(q)) ||
+        (g.email && g.email.toLowerCase().includes(q))
+      );
+      renderList(filtered);
+    }
+
+    function renderList(guests) {
+      const container = document.getElementById('guestListContainer');
+      container.innerHTML = '';
+
+      const checkedCount = directory.filter(g => (g.status && g.status.toLowerCase() === 'checked in')).length;
+      document.getElementById('statSummary').innerText = `Showing ${guests.length} of ${directory.length} entries`;
+      document.getElementById('statCheckedIn').innerText = `Checked In: ${checkedCount} / ${directory.length}`;
+
+      if (guests.length === 0) {
+        container.innerHTML = '<div class="alert alert-light text-center py-4 border">No matching guests found.</div>';
+        return;
+      }
+
+      guests.forEach(g => {
+        const isChecked = (g.status && g.status.toLowerCase() === 'checked in');
+        const card = document.createElement('div');
+        card.className = `guest-card p-3 ${isChecked ? 'checked-in' : ''}`;
+
+        const isMember = (g.memberId && g.memberId !== 'Non Mbr');
+        const memberBadge = isMember ? `<span class="badge bg-primary me-1">${g.memberId}</span>` : `<span class="badge bg-secondary me-1">Non-Member</span>`;
+
+        const deskBadgeText = isChecked 
+          ? `✓ Checked In at ${g.desk || 'Desk 1'} at ${g.timestamp || '--:--:--'}`
+          : 'Pending Check-in';
+
+        card.innerHTML = `
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <div class="mb-1">${memberBadge}</div>
+              <h5 class="fw-bold m-0 text-dark">${g.fullName}</h5>
+              <div class="text-muted small">${g.email}</div>
+            </div>
+            <span class="seat-badge">${g.seats ? g.seats : 'Seat On Check-In'}</span>
+          </div>
+
+          <div class="d-flex flex-wrap gap-1 my-2 align-items-center">
+            <span class="badge bg-dark count-pill">👥 Headcount: ${g.headcount}</span>
+            <span class="badge bg-primary count-pill">Adults: ${g.adults}</span>
+            ${g.kidsAbove12 > 0 ? `<span class="badge bg-info text-dark count-pill">Kids >12: ${g.kidsAbove12}</span>` : ''}
+            ${g.kids6to12 > 0 ? `<span class="badge bg-warning text-dark count-pill">Kids 6-12: ${g.kids6to12}</span>` : ''}
+            ${g.kidsBelow6 > 0 ? `<span class="badge bg-light text-dark border count-pill">Kids <6: ${g.kidsBelow6}</span>` : ''}
+            <span class="badge bg-danger count-pill">🍽️ Coupons: ${g.foodCoupons}</span>
+          </div>
+
+          ${g.notes && g.notes !== 'None' ? `<div class="small text-danger fw-semibold mb-2">⚠️ ${g.notes}</div>` : ''}
+
+          <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+            <div>
+              <span class="badge ${isChecked ? 'bg-success' : 'bg-secondary'} py-2 px-3">${deskBadgeText}</span>
+            </div>
+            <div>
+              <button class="btn ${isChecked ? 'btn-outline-secondary btn-sm' : 'btn-success btn-action-primary'} touch-btn" 
+                      onclick="promptCheckIn(${g.rowIndex})">
+                ${isChecked ? 'Re-send / View' : '✓ Check In'}
+              </button>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function promptCheckIn(rowIndex) {
+      const guest = directory.find(g => g.rowIndex === rowIndex);
+      if (!guest) return;
+
+      pendingRowIndex = rowIndex;
+      document.getElementById('cGuestName').innerText = guest.fullName;
+      document.getElementById('cBookingId').innerText = (guest.memberId === 'Non Mbr') ? 'Non-Member' : guest.memberId;
+      document.getElementById('cHeadcount').innerText = `${guest.headcount} Guests (${guest.foodCoupons} Food Coupons)`;
+      document.getElementById('cEmail').innerText = guest.email || 'No email on record';
+
+      if (confirmModal) confirmModal.show();
+    }
+
+    function proceedWithCheckIn() {
+      if (!pendingRowIndex) return;
+
+      const confirmBtn = document.getElementById('btnConfirmCheckIn');
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '⏳ Checking in...';
+
+      const targetRow = pendingRowIndex;
+
+      google.script.run
+        .withSuccessHandler(res => {
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = '✓ Yes, Check In';
+          if (confirmModal) confirmModal.hide();
+          pendingRowIndex = null;
+
+          if (!res.success) {
+            alert('Error: ' + res.message);
+            return;
+          }
+
+          document.getElementById('mGuestName').innerText = res.fullName;
+          document.getElementById('mBookingId').innerText = (res.bookingId === 'Non Mbr' ? 'Non-Member' : res.bookingId) + (res.isRecheck ? ' (Already Checked In)' : '');
+          document.getElementById('mAssignedSeats').innerText = res.seats;
+          
+          const kidsTotal = (res.kids12 || 0) + (res.kids6to12 || 0) + (res.kids6 || 0);
+          document.getElementById('mBands').innerText = `${res.adults} Adult${res.adults !== 1 ? 's' : ''}, ${kidsTotal} Kid${kidsTotal !== 1 ? 's' : ''}`;
+          document.getElementById('mCoupons').innerText = `${res.foodCoupons} Coupons`;
+
+          const emailAlert = document.getElementById('mEmailAlert');
+          if (res.emailStatus.startsWith('Check-in confirmation delivered') || res.emailStatus.startsWith('Sent')) {
+            emailAlert.className = 'alert alert-success py-2 px-3 small d-flex align-items-center justify-content-center gap-2 mb-3';
+            document.getElementById('mEmailIcon').innerText = '✅';
+            document.getElementById('mEmailText').innerText = res.emailStatus;
+          } else {
+            emailAlert.className = 'alert alert-warning py-2 px-3 small d-flex align-items-center justify-content-center gap-2 mb-3';
+            document.getElementById('mEmailIcon').innerText = '⚠️';
+            document.getElementById('mEmailText').innerText = res.emailStatus;
+          }
+
+          if (resultModal) resultModal.show();
+          refreshDirectory();
+        })
+        .withFailureHandler(err => {
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = '✓ Yes, Check In';
+          alert('Network or Script Error: ' + err.message);
+        })
+        .checkInAndAssignSeats(targetRow, currentDesk);
+    }
+
+    function toggleScanner() {
+      const card = document.getElementById('scannerCard');
+      if (card.classList.contains('d-none')) {
+        card.classList.remove('d-none');
+        startScanner();
+      } else {
+        stopScanner();
+      }
+    }
+
+    function startScanner() {
+      html5QrScanner = new Html5Qrcode("reader");
+      html5QrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        decodedText => {
+          stopScanner();
+          const sInput = document.getElementById('searchInput');
+          if (sInput) sInput.value = decodedText.trim();
+          filterDirectory();
+        }
+      ).catch(err => {
+        alert("Camera access denied or unavailable: " + err);
+        stopScanner();
+      });
+    }
+
+    function stopScanner() {
+      if (html5QrScanner) {
+        html5QrScanner.stop().then(() => {
+          document.getElementById('scannerCard').classList.add('d-none');
+        }).catch(() => {
+          document.getElementById('scannerCard').classList.add('d-none');
+        });
+      } else {
+        document.getElementById('scannerCard').classList.add('d-none');
+      }
+    }
+
+    function openWalkInModal() {
+      document.getElementById('walkInForm').reset();
+      if (walkInModal) walkInModal.show();
+    }
+
+    document.getElementById('walkInForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const submitBtn = document.getElementById('wSubmitBtn');
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Assigning seats...';
+
+      const payload = {
+        firstName: document.getElementById('wFirstName').value.trim(),
+        lastName: document.getElementById('wLastName').value.trim(),
+        email: document.getElementById('wEmail').value.trim(),
+        adults: document.getElementById('wAdults').value,
+        kidsAbove12: document.getElementById('wKids12').value,
+        kids6to12: document.getElementById('wKids6to12').value,
+        kidsBelow6: document.getElementById('wKids6').value,
+        notes: document.getElementById('wNotes').value.trim(),
+        deskId: currentDesk
+      };
+
+      google.script.run
+        .withSuccessHandler(res => {
+          submitBtn.disabled = false;
+          submitBtn.innerText = 'Assign Seats & Complete Entry';
+          if (walkInModal) walkInModal.hide();
+
+          if (!res.success) {
+            alert('Walk-in error: ' + res.message);
+            return;
+          }
+
+          document.getElementById('mGuestName').innerText = res.fullName;
+          document.getElementById('mBookingId').innerText = res.bookingId + ' (Spot Walk-in)';
+          document.getElementById('mAssignedSeats').innerText = res.seats;
+          
+          const kidsTotal = (res.kids12 || 0) + (res.kids6to12 || 0) + (res.kids6 || 0);
+          document.getElementById('mBands').innerText = `${res.adults} Adult${res.adults !== 1 ? 's' : ''}, ${kidsTotal} Kid${kidsTotal !== 1 ? 's' : ''}`;
+          document.getElementById('mCoupons').innerText = `${res.foodCoupons} Coupons`;
+
+          const emailAlert = document.getElementById('mEmailAlert');
+          if (res.emailStatus.startsWith('Check-in confirmation delivered') || res.emailStatus.startsWith('Sent')) {
+            emailAlert.className = 'alert alert-success py-2 px-3 small d-flex align-items-center justify-content-center gap-2 mb-3';
+            document.getElementById('mEmailIcon').innerText = '✅';
+            document.getElementById('mEmailText').innerText = res.emailStatus;
+          } else {
+            emailAlert.className = 'alert alert-warning py-2 px-3 small d-flex align-items-center justify-content-center gap-2 mb-3';
+            document.getElementById('mEmailIcon').innerText = '⚠️';
+            document.getElementById('mEmailText').innerText = res.emailStatus;
+          }
+
+          if (resultModal) resultModal.show();
+          refreshDirectory();
+        })
+        .withFailureHandler(err => {
+          submitBtn.disabled = false;
+          submitBtn.innerText = 'Assign Seats & Complete Entry';
+          alert('Submission error: ' + err.message);
+        })
+        .registerSpotWalkIn(payload);
+    });
+  </script>
+</body>
+</html>
