@@ -5,9 +5,9 @@ const SHEET_NAME = 'Guest List & Check-in';
 const STARTING_SEAT_NUMBER = 1;
 
 // 🛡️ DEV / TESTING SAFETY SWITCH:
-// Set DEV_MODE = true during testing. All emails route exclusively to DEV_TEST_EMAIL.
+// In DEV_MODE, check-ins from the pre-registered list route to DEV_TEST_EMAIL.
 // Set DEV_MODE = false on the live event day.
-const DEV_MODE = true;
+const DEV_MODE = false;
 const DEV_TEST_EMAIL = 'sebastianschnell54@gmail.com';
 
 const MMM_LOGO_URL = 'https://mmmunich.com/wp-content/uploads/2019/03/mmmunich-lg.png';
@@ -33,7 +33,6 @@ function getGuestDirectory() {
   return rows.map((r, index) => {
     const rowNum = index + 2;
 
-    // Resilient timestamp parsing (handles Date objects, ISO strings, and raw times)
     let timeStr = '';
     if (r[13]) {
       if (r[13] instanceof Date) {
@@ -72,7 +71,7 @@ function getGuestDirectory() {
 }
 
 /**
- * Checks in guest, assigns seats, and dispatches confirmation email.
+ * Checks in pre-registered guest, assigns seats, and dispatches confirmation email.
  */
 function checkInAndAssignSeats(rowIndex, deskId) {
   const lock = LockService.getScriptLock();
@@ -94,7 +93,6 @@ function checkInAndAssignSeats(rowIndex, deskId) {
     let assignedSeats = String(guestData[11] || '').trim();
     const isAlreadyCheckedIn = (String(guestData[12]).trim().toLowerCase() === 'checked in');
 
-    // Dynamic contiguous seat allocation
     if (!assignedSeats) {
       let maxSeat = STARTING_SEAT_NUMBER - 1;
       const lastRow = sheet.getLastRow();
@@ -177,7 +175,7 @@ function checkInAndAssignSeats(rowIndex, deskId) {
 }
 
 /**
- * Registers an on-the-spot walk-in attendee.
+ * Registers an on-the-spot walk-in attendee with explicit payment mode tracking.
  */
 function registerSpotWalkIn(guestData) {
   const lock = LockService.getScriptLock();
@@ -218,6 +216,9 @@ function registerSpotWalkIn(guestData) {
     const assignedSeats = (startSeat === endSeat) ? `Seat ${startSeat}` : `Seats ${startSeat} - ${endSeat}`;
     const now = Utilities.formatDate(new Date(), 'Europe/Berlin', 'yyyy-MM-dd HH:mm:ss');
 
+    const paymentTag = guestData.paymentMethod ? `[${guestData.paymentMethod}]` : '';
+    const combinedNotes = [paymentTag, guestData.notes].filter(Boolean).join(' ') || 'Spot Walk-in';
+
     const newRow = [
       walkInId,
       guestData.firstName,
@@ -234,12 +235,13 @@ function registerSpotWalkIn(guestData) {
       'Checked In',
       now,
       guestData.deskId || 'Desk 1',
-      guestData.notes || 'Spot Walk-in'
+      combinedNotes
     ];
 
     sheet.appendRow(newRow);
 
-    let targetEmail = DEV_MODE ? DEV_TEST_EMAIL : guestData.email;
+    // Directly use the email explicitly entered into the Walk-In form
+    let targetEmail = String(guestData.email || '').trim();
     let emailStatus = 'No email provided';
 
     if (targetEmail && targetEmail.includes('@')) {
@@ -250,7 +252,18 @@ function registerSpotWalkIn(guestData) {
           '',
           {
             name: 'Maharashtra Mandal Munich',
-            htmlBody: buildCheckInEmailHtml(guestData.firstName, assignedSeats, walkInId, totalCount, adults, kids12, kids6to12, kids6, foodCoupons, guestData.deskId)
+            htmlBody: buildCheckInEmailHtml(
+              guestData.firstName, 
+              assignedSeats, 
+              walkInId, 
+              totalCount, 
+              adults, 
+              kids12, 
+              kids6to12, 
+              kids6, 
+              foodCoupons, 
+              guestData.deskId
+            )
           }
         );
         emailStatus = `Check-in confirmation delivered to ${targetEmail}`;

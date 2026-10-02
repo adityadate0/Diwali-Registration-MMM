@@ -84,6 +84,14 @@
     .touch-btn {
       touch-action: manipulation;
     }
+    .payment-option {
+      cursor: pointer;
+      user-select: none;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+    .payment-option:active {
+      background-color: #e9ecef !important;
+    }
   </style>
 </head>
 <body class="p-2 p-md-3">
@@ -143,7 +151,7 @@
   <!-- Guest List Container -->
   <div id="guestListContainer"></div>
 
-  <!-- 1. Confirmation Modal -->
+  <!-- 1. Confirmation Modal (Pre-registered Guest) -->
   <div class="modal fade" id="confirmCheckInModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
@@ -183,7 +191,131 @@
     </div>
   </div>
 
-  <!-- 2. Result Pop-Up Modal -->
+  <!-- 2. Spot Walk-In Confirmation Modal -->
+  <div class="modal fade" id="confirmWalkInModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+        <div class="modal-header bg-warning text-dark" style="border-radius: 16px 16px 0 0;">
+          <h5 class="modal-title fw-bold">⚠️ Confirm Spot Walk-In</h5>
+          <button type="button" class="btn-close" onclick="cancelWalkInConfirm()"></button>
+        </div>
+        <div class="modal-body p-4 text-center">
+          <p class="fs-5 mb-2">Do you want to register & check in <br><strong id="cwGuestName" class="text-danger fs-4"></strong>?</p>
+          
+          <div class="card bg-light border-0 my-3 text-start p-3 small">
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted">Registration Type:</span>
+              <strong class="text-success">Spot Walk-In</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted">Headcount:</span>
+              <strong id="cwHeadcount">--</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted">Payment Mode:</span>
+              <strong id="cwPayment" class="text-primary">--</strong>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span class="text-muted">Notification Recipient:</span>
+              <strong id="cwEmail" class="text-primary text-truncate ms-2">--</strong>
+            </div>
+          </div>
+
+          <p class="text-muted small mb-0">
+            Tapping confirm registers this guest, reserves consecutive seats, and sends the confirmation email.
+          </p>
+        </div>
+        <div class="modal-footer bg-light justify-content-between" style="border-radius: 0 0 16px 16px;">
+          <button type="button" class="btn btn-outline-secondary px-4 fw-semibold" onclick="cancelWalkInConfirm()">Back / Edit</button>
+          <button type="button" class="btn btn-success px-4 fw-bold fs-6" id="btnConfirmWalkIn" onclick="proceedWithWalkIn()">
+            ✓ Yes, Register & Check In
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Spot Walk-In Registration Modal -->
+  <div class="modal fade" id="walkInModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+        <div class="modal-header bg-success text-white" style="border-radius: 16px 16px 0 0;">
+          <h5 class="modal-title fw-bold">➕ Spot Walk-In Registration</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-3">
+          <form id="walkInForm">
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label fw-bold small">First Name *</label>
+                <input type="text" id="wFirstName" class="form-control" required>
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold small">Last Name *</label>
+                <input type="text" id="wLastName" class="form-control" required>
+              </div>
+            </div>
+
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="form-label fw-bold small">Email * (for seat email)</label>
+                <input type="email" id="wEmail" class="form-control" placeholder="name@domain.de" required>
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold small">Phone (Optional)</label>
+                <input type="tel" id="wPhone" class="form-control" placeholder="+49...">
+              </div>
+            </div>
+
+            <div class="row g-2 mb-3">
+              <div class="col-3">
+                <label class="form-label fw-bold small">Adults *</label>
+                <input type="number" id="wAdults" class="form-control" value="1" min="1" required>
+              </div>
+              <div class="col-3">
+                <label class="form-label fw-bold small">Kids (>12)</label>
+                <input type="number" id="wKids12" class="form-control" value="0" min="0">
+              </div>
+              <div class="col-3">
+                <label class="form-label fw-bold small">Kids (6-12)</label>
+                <input type="number" id="wKids6to12" class="form-control" value="0" min="0">
+              </div>
+              <div class="col-3">
+                <label class="form-label fw-bold small">Kids (<6)</label>
+                <input type="number" id="wKids6" class="form-control" value="0" min="0">
+              </div>
+            </div>
+
+            <!-- Mutually exclusive, required payment options -->
+            <div class="mb-3">
+              <label class="form-label fw-bold small d-block">Mode of Payment *</label>
+              <div class="d-flex gap-2">
+                <label class="payment-option border rounded p-2 px-3 flex-fill bg-light d-flex align-items-center gap-2 m-0 shadow-sm" for="wPayCash">
+                  <input class="form-check-input mt-0" type="radio" name="wPayment" id="wPayCash" value="Cash" required>
+                  <span class="fw-bold text-dark">💵 Cash</span>
+                </label>
+                <label class="payment-option border rounded p-2 px-3 flex-fill bg-light d-flex align-items-center gap-2 m-0 shadow-sm" for="wPayPayPal">
+                  <input class="form-check-input mt-0" type="radio" name="wPayment" id="wPayPayPal" value="PayPal" required>
+                  <span class="fw-bold text-dark">📱 PayPal</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-bold small">Notes / Dietary (Optional)</label>
+              <input type="text" id="wNotes" class="form-control" placeholder="Jain / Highchair / etc.">
+            </div>
+
+            <button type="submit" id="wSubmitBtn" class="btn btn-success w-100 fw-bold py-2 fs-5 touch-btn" style="border-radius: 10px;">
+              Assign Seats & Complete Entry
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Result Pop-Up Modal -->
   <div class="modal fade" id="checkInResultModal" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content text-center p-3 shadow-lg border-0" style="border-radius: 20px;">
@@ -225,71 +357,6 @@
     </div>
   </div>
 
-  <!-- 3. Spot Walk-In Registration Modal -->
-  <div class="modal fade" id="walkInModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
-        <div class="modal-header bg-success text-white" style="border-radius: 16px 16px 0 0;">
-          <h5 class="modal-title fw-bold">➕ Spot Walk-In Registration</h5>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body p-3">
-          <form id="walkInForm">
-            <div class="row g-2 mb-2">
-              <div class="col-6">
-                <label class="form-label fw-bold small">First Name *</label>
-                <input type="text" id="wFirstName" class="form-control" required>
-              </div>
-              <div class="col-6">
-                <label class="form-label fw-bold small">Last Name *</label>
-                <input type="text" id="wLastName" class="form-control" required>
-              </div>
-            </div>
-
-            <div class="row g-2 mb-2">
-              <div class="col-6">
-                <label class="form-label fw-bold small">Email (for seat email)</label>
-                <input type="email" id="wEmail" class="form-control" placeholder="name@domain.de">
-              </div>
-              <div class="col-6">
-                <label class="form-label fw-bold small">Phone</label>
-                <input type="tel" id="wPhone" class="form-control" placeholder="+49...">
-              </div>
-            </div>
-
-            <div class="row g-2 mb-3">
-              <div class="col-3">
-                <label class="form-label fw-bold small">Adults</label>
-                <input type="number" id="wAdults" class="form-control" value="1" min="1" required>
-              </div>
-              <div class="col-3">
-                <label class="form-label fw-bold small">Kids (>12)</label>
-                <input type="number" id="wKids12" class="form-control" value="0" min="0">
-              </div>
-              <div class="col-3">
-                <label class="form-label fw-bold small">Kids (6-12)</label>
-                <input type="number" id="wKids6to12" class="form-control" value="0" min="0">
-              </div>
-              <div class="col-3">
-                <label class="form-label fw-bold small">Kids (<6)</label>
-                <input type="number" id="wKids6" class="form-control" value="0" min="0">
-              </div>
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label fw-bold small">Notes / Payment</label>
-              <input type="text" id="wNotes" class="form-control" placeholder="Spot Cash / PayPal / etc.">
-            </div>
-
-            <button type="submit" id="wSubmitBtn" class="btn btn-success w-100 fw-bold py-2 fs-5 touch-btn" style="border-radius: 10px;">
-              Assign Seats & Complete Entry
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     let directory = [];
@@ -298,18 +365,21 @@
     let resultModal = null;
     let walkInModal = null;
     let confirmModal = null;
+    let confirmWalkInModal = null;
     let pendingRowIndex = null;
+    let pendingWalkInPayload = null;
 
-    // Resilient initialization: executes whether DOM is still loading or already parsed
     function initApp() {
       try {
         if (typeof bootstrap !== 'undefined') {
           const m1 = document.getElementById('checkInResultModal');
           const m2 = document.getElementById('walkInModal');
           const m3 = document.getElementById('confirmCheckInModal');
+          const m4 = document.getElementById('confirmWalkInModal');
           if (m1) resultModal = new bootstrap.Modal(m1);
           if (m2) walkInModal = new bootstrap.Modal(m2);
           if (m3) confirmModal = new bootstrap.Modal(m3);
+          if (m4) confirmWalkInModal = new bootstrap.Modal(m4);
         }
       } catch (err) {
         console.warn('Modal init warning:', err);
@@ -424,6 +494,7 @@
       });
     }
 
+    // Step 1: Open Confirmation for pre-registered guests
     function promptCheckIn(rowIndex) {
       const guest = directory.find(g => g.rowIndex === rowIndex);
       if (!guest) return;
@@ -437,6 +508,7 @@
       if (confirmModal) confirmModal.show();
     }
 
+    // Step 2: Confirm pre-registered check-in
     function proceedWithCheckIn() {
       if (!pendingRowIndex) return;
 
@@ -488,6 +560,7 @@
         .checkInAndAssignSeats(targetRow, currentDesk);
     }
 
+    // QR Code Scanning
     function toggleScanner() {
       const card = document.getElementById('scannerCard');
       if (card.classList.contains('d-none')) {
@@ -527,34 +600,74 @@
       }
     }
 
+    // Spot Walk-In Form Handling
     function openWalkInModal() {
       document.getElementById('walkInForm').reset();
       if (walkInModal) walkInModal.show();
     }
 
+    // Step 1 of Walk-In: Validate form & trigger confirmation modal
     document.getElementById('walkInForm').addEventListener('submit', e => {
       e.preventDefault();
-      const submitBtn = document.getElementById('wSubmitBtn');
-      submitBtn.disabled = true;
-      submitBtn.innerText = 'Assigning seats...';
 
-      const payload = {
+      const paymentEl = document.querySelector('input[name="wPayment"]:checked');
+      if (!paymentEl) {
+        alert('Please select a payment mode (Cash or PayPal).');
+        return;
+      }
+
+      pendingWalkInPayload = {
         firstName: document.getElementById('wFirstName').value.trim(),
         lastName: document.getElementById('wLastName').value.trim(),
         email: document.getElementById('wEmail').value.trim(),
+        phone: document.getElementById('wPhone').value.trim(),
         adults: document.getElementById('wAdults').value,
         kidsAbove12: document.getElementById('wKids12').value,
         kids6to12: document.getElementById('wKids6to12').value,
         kidsBelow6: document.getElementById('wKids6').value,
+        paymentMethod: paymentEl.value,
         notes: document.getElementById('wNotes').value.trim(),
         deskId: currentDesk
       };
 
+      const totalHeadcount = (parseInt(pendingWalkInPayload.adults, 10) || 0) +
+        (parseInt(pendingWalkInPayload.kidsAbove12, 10) || 0) +
+        (parseInt(pendingWalkInPayload.kids6to12, 10) || 0) +
+        (parseInt(pendingWalkInPayload.kidsBelow6, 10) || 0);
+
+      const totalCoupons = (parseInt(pendingWalkInPayload.adults, 10) || 0) +
+        (parseInt(pendingWalkInPayload.kidsAbove12, 10) || 0) +
+        (parseInt(pendingWalkInPayload.kids6to12, 10) || 0);
+
+      document.getElementById('cwGuestName').innerText = `${pendingWalkInPayload.firstName} ${pendingWalkInPayload.lastName}`.trim();
+      document.getElementById('cwHeadcount').innerText = `${totalHeadcount} Guests (${totalCoupons} Food Coupons)`;
+      document.getElementById('cwPayment').innerText = pendingWalkInPayload.paymentMethod;
+      document.getElementById('cwEmail').innerText = pendingWalkInPayload.email;
+
+      if (walkInModal) walkInModal.hide();
+      if (confirmWalkInModal) confirmWalkInModal.show();
+    });
+
+    function cancelWalkInConfirm() {
+      if (confirmWalkInModal) confirmWalkInModal.hide();
+      if (walkInModal) walkInModal.show();
+    }
+
+    // Step 2 of Walk-In: Execute registration after confirmation
+    function proceedWithWalkIn() {
+      if (!pendingWalkInPayload) return;
+
+      const confirmBtn = document.getElementById('btnConfirmWalkIn');
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '⏳ Registering...';
+
       google.script.run
         .withSuccessHandler(res => {
-          submitBtn.disabled = false;
-          submitBtn.innerText = 'Assign Seats & Complete Entry';
-          if (walkInModal) walkInModal.hide();
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = '✓ Yes, Register & Check In';
+          if (confirmWalkInModal) confirmWalkInModal.hide();
+          document.getElementById('walkInForm').reset();
+          pendingWalkInPayload = null;
 
           if (!res.success) {
             alert('Walk-in error: ' + res.message);
@@ -584,12 +697,12 @@
           refreshDirectory();
         })
         .withFailureHandler(err => {
-          submitBtn.disabled = false;
-          submitBtn.innerText = 'Assign Seats & Complete Entry';
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = '✓ Yes, Register & Check In';
           alert('Submission error: ' + err.message);
         })
-        .registerSpotWalkIn(payload);
-    });
+        .registerSpotWalkIn(pendingWalkInPayload);
+    }
   </script>
 </body>
 </html>
